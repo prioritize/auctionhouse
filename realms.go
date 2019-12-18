@@ -11,44 +11,6 @@ import (
 	"time"
 )
 
-type Realm struct {
-	Name string `json:"name"`
-	ID   int    `json:"id"`
-	Slug string `json:"slug"`
-}
-type RealmData struct {
-	ID           int       `json:"id"`
-	Region       Region    `json:"region"`
-	Name         string    `json:"name"`
-	Category     string    `json:"category"`
-	Locale       string    `json:"locale"`
-	Timezone     string    `json:"timezone"`
-	Type         RealmType `json:"type"`
-	IsTournament bool      `json:"is_tournament"`
-	Slug         string    `json:"slug"`
-}
-
-type Region struct {
-	Name string `json:"name"`
-	ID   int    `json:"id"`
-}
-type RealmType struct {
-	Type string `json:"type"`
-	Name string `json:"name"`
-}
-type Daemon struct {
-	Token  auctionauth.Token
-	ID     int
-	API    map[string]string
-	Region string
-	Locale string
-	Realms []Realm
-}
-
-const regionString = "{region}"
-const localeString = "{locale}"
-const tokenString = "{token}"
-
 func NewDaemon(region, locale string) (Daemon, bool) {
 	d := Daemon{Region: region, Locale: locale}
 	token, check := auctionauth.GetNewToken()
@@ -91,91 +53,48 @@ func (d *Daemon) LoadMapWithAPI() {
 		}
 	}
 }
-func GetAddress(labels ...string) ([]string, bool) {
-	out := make([]string, 0)
-	var addresses map[string]interface{}
-	file, err := os.Open("../auctionjson/api.json")
-	if err != nil {
-		fmt.Println("GetAddress() failed using os.Open()")
-		return []string{}, true
-	}
-	body, err := ioutil.ReadAll(file)
-	if err != nil {
-		fmt.Println("GetAddress() failed using ioutil.ReadAll()")
-		return []string{}, true
-	}
-	err = json.Unmarshal(body, &addresses)
-	if err != nil {
-		fmt.Println("GetAddress() failed using json.Unmarshal()")
-		return []string{}, true
-	}
-	for _, v := range labels {
-		label, ok := addresses[v].(string)
-		if ok {
-			out = append(out, label)
-		}
-	}
-	return out, false
-}
 
-// func GetRealmAddress(region, slug, token string) (string, bool) {
-// 	var result map[string]interface{}
-// 	base, err := os.Open("../auctionjson/api.json")
-// 	if err != nil {
-// 		return "", true
-// 	}
-// 	body, err := ioutil.ReadAll(base)
-// 	if err != nil {
-// 		return "", true
-// 	}
-// 	err = json.Unmarshal(body, &result)
-// 	if err != nil {
-// 		return "", true
-// 	}
-// 	baseAddress, ok := result["apidata_base"]
-// 	if !ok {
-// 		return "", true
-// 	}
-// 	suffix, ok := result["realm"]
-// 	if !ok {
-// 		return "", true
-// 	}
-// 	suffixString, suffixOk := suffix.(string)
-// 	baseAddressString, baseOk := baseAddress.(string)
-// 	if suffixOk && baseOk {
-// 		out := (BuildRealmAddress("us", baseAddressString, suffixString, slug, token))
-// 		return out, false
-// 	}
-// 	return "", true
-// }
-func (d *Daemon) GetRealms() ([]Realm, bool) {
+func GetRealmAddress(region, slug, token string) (string, bool) {
+	return "", true
+}
+func (d *Daemon) GetRealms() (Realms, bool) {
 	// Build the address to get the realm index
 	url, check := d.BuildRealmIndexAddress()
 	if !check {
-		return []Realm{}, false
+		return Realms{}, false
 	}
-	fmt.Println(url)
-	// Get the Realm Index
-	// For each entry in the realm index query the realm page
-	// Store the realm data into the database
 	realms, check := d.CallRealmIndexAPI(url)
 	if !check {
-		return []Realm{}, false
-	}
-	fmt.Println(realms)
-	for _, v := range realms {
-		fmt.Println(v.Slug)
+		return Realms{}, false
 	}
 
-	return []Realm{}, false
+	return realms, false
 }
-func (d *Daemon) BuildRealmAddress(region, apiString, suffix, slug, token string) string {
-	locale := "en_US"
-	out := strings.Replace(apiString, "{region}", region, 1)
-	out = out + strings.Replace(suffix, "{slug}", slug, 1)
-	out = strings.Replace(out, "{locale}", locale, 1)
-	return strings.Replace(out, "{token}", token, 1)
+func (d *Daemon) BuildAuctionURLS() {
+	for i, v := range d.Realms {
+		url, check := d.GetAPIStrings("api", "auctionrequest")
+		if !check{
+			fmt.Println("Error in BuildAuctionURLs()")
+		}
+		url = strings.Replace()
+	url = strings.Replace(url, regionString, d.Region, 1)
+	url = strings.Replace(url, localeString, d.Locale, 1)
+	url = strings.Replace(url, tokenString, d.Token.Token, 1)
+	url = strings.Replace(url, "{slug}", slug, 1)
+		d.Realms[i].URL = 
 
+	}
+}
+func (d *Daemon) BuildRealmAddress(slug string) (string, bool) {
+	realmAddress, check := d.GetAPIStrings("api", "realm")
+	if !check {
+		return "", false
+	}
+	realmAddress = strings.Replace(realmAddress, regionString, d.Region, 1)
+	realmAddress = strings.Replace(realmAddress, localeString, d.Locale, 1)
+	realmAddress = strings.Replace(realmAddress, tokenString, d.Token.Token, 1)
+	realmAddress = strings.Replace(realmAddress, "{slug}", slug, 1)
+	return realmAddress, true
 }
 
 func (d *Daemon) BuildRealmIndexAddress() (string, bool) {
@@ -216,7 +135,7 @@ func CallRealmAPI(address string) (RealmData, bool) {
 	return rd, false
 }
 
-func (d *Daemon) CallRealmIndexAPI(address string) ([]Realm, bool) {
+func (d *Daemon) CallRealmIndexAPI(address string) (Realms, bool) {
 	fmt.Println(address)
 	client := http.Client{Timeout: 5 * time.Second}
 	fmt.Println(address)
@@ -229,22 +148,22 @@ func (d *Daemon) CallRealmIndexAPI(address string) ([]Realm, bool) {
 	res, err := client.Do(request)
 	if err != nil {
 		fmt.Println("CallRealmIndexAPI() failed using client.Do()")
-		return []Realm{}, false
+		return Realms{}, false
 	}
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
 	fmt.Println(res.StatusCode)
 	if err != nil {
 		fmt.Println("CallRealmIndexAPI() failed using ioutil.ReadAll()")
-		return []Realm{}, false
+		return Realms{}, false
 	}
 
-	rd := []Realm{}
+	rd := Realms{}
 	fmt.Println(string(body))
 	err = json.Unmarshal(body, &rd)
 	if err != nil {
 		fmt.Println("CallRealmIndexAPI() generated an error in json.Unmarshal")
-		return []Realm{}, false
+		return Realms{}, false
 	}
 	return rd, true
 }
