@@ -20,9 +20,6 @@ func NewDaemon(region, locale string) (Daemon, bool) {
 		return Daemon{}, true
 	}
 	d.LoadMapWithAPI()
-	for k, v := range d.API {
-		fmt.Println(k, v)
-	}
 	return d, false
 }
 func (d *Daemon) LoadMapWithAPI() {
@@ -67,22 +64,22 @@ func (d *Daemon) GetRealms() (Realms, bool) {
 	if !check {
 		return Realms{}, false
 	}
-
-	return realms, false
+	d.Realms = realms.Realms
+	d.BuildAuctionURLS()
+	return realms, true
 }
 func (d *Daemon) BuildAuctionURLS() {
 	for i, v := range d.Realms {
 		url, check := d.GetAPIStrings("api", "auctionrequest")
-		if !check{
+		if !check {
 			fmt.Println("Error in BuildAuctionURLs()")
 		}
-		url = strings.Replace()
-	url = strings.Replace(url, regionString, d.Region, 1)
-	url = strings.Replace(url, localeString, d.Locale, 1)
-	url = strings.Replace(url, tokenString, d.Token.Token, 1)
-	url = strings.Replace(url, "{slug}", slug, 1)
-		d.Realms[i].URL = 
+		url = strings.Replace(url, regionString, d.Region, 1)
+		url = strings.Replace(url, localeString, d.Locale, 1)
+		url = strings.Replace(url, tokenString, d.Token.Token, 1)
+		url = strings.Replace(url, "{slug}", v.Slug, 1)
 
+		d.Realms[i].URL = url
 	}
 }
 func (d *Daemon) BuildRealmAddress(slug string) (string, bool) {
@@ -111,7 +108,6 @@ func (d *Daemon) BuildRealmIndexAddress() (string, bool) {
 
 func CallRealmAPI(address string) (RealmData, bool) {
 	client := http.Client{Timeout: 5 * time.Second}
-	fmt.Println(address)
 	request, err := http.NewRequest(http.MethodGet, address, nil)
 	if err != nil {
 		return RealmData{}, true
@@ -136,15 +132,12 @@ func CallRealmAPI(address string) (RealmData, bool) {
 }
 
 func (d *Daemon) CallRealmIndexAPI(address string) (Realms, bool) {
-	fmt.Println(address)
 	client := http.Client{Timeout: 5 * time.Second}
-	fmt.Println(address)
 	request, err := http.NewRequest(http.MethodGet, address, nil)
 	if err != nil {
 		fmt.Println("CallRealmIndexAPI() failed using http.NewRequest()")
 		fmt.Println(err)
 	}
-	fmt.Println("The address to client.Do() is " + address)
 	res, err := client.Do(request)
 	if err != nil {
 		fmt.Println("CallRealmIndexAPI() failed using client.Do()")
@@ -152,14 +145,12 @@ func (d *Daemon) CallRealmIndexAPI(address string) (Realms, bool) {
 	}
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
-	fmt.Println(res.StatusCode)
 	if err != nil {
 		fmt.Println("CallRealmIndexAPI() failed using ioutil.ReadAll()")
 		return Realms{}, false
 	}
 
 	rd := Realms{}
-	fmt.Println(string(body))
 	err = json.Unmarshal(body, &rd)
 	if err != nil {
 		fmt.Println("CallRealmIndexAPI() generated an error in json.Unmarshal")

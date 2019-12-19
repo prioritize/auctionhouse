@@ -14,12 +14,12 @@ const tokenString = "{token}"
 // Database Types
 // ---------------------Database Types--------------------
 
-type dbInfo struct {
-	host      string
-	port      int
-	user      string
-	password  string
-	dbname    string
+type DBInfo struct {
+	host      string `json:"host"`
+	port      int    `json:"port"`
+	user      string `json:"user"`
+	password  string `json:"password"`
+	dbname    string `json:"dbname"`
 	connected bool
 }
 type aucDB struct {
@@ -89,6 +89,8 @@ type AuctionHandler struct {
 	Insert      string
 	Token       auctionauth.Token
 	URL         string
+	db          *sql.DB
+	dbInfo      DBInfo
 }
 type Auctions struct {
 	Auctions []Auction `json:"auctions"`
@@ -97,7 +99,6 @@ type Auctions struct {
 type Auction struct {
 	AuctionID int    `json:"auc"`
 	Item      int    `json:"item"`
-	Owner     string `json:"owner"`
 	ORealm    string `json:"ownerRealm"`
 	Bid       int    `json:"bid"`
 	Buyout    int    `json:"buyout"`
