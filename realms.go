@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -107,7 +108,7 @@ func (d *Daemon) BuildRealmIndexAddress() (string, bool) {
 }
 
 func CallRealmAPI(address string) (RealmData, bool) {
-	client := http.Client{Timeout: 5 * time.Second}
+	client := http.Client{Timeout: 20 * time.Second}
 	request, err := http.NewRequest(http.MethodGet, address, nil)
 	if err != nil {
 		return RealmData{}, true
@@ -132,7 +133,7 @@ func CallRealmAPI(address string) (RealmData, bool) {
 }
 
 func (d *Daemon) CallRealmIndexAPI(address string) (Realms, bool) {
-	client := http.Client{Timeout: 5 * time.Second}
+	client := http.Client{Timeout: 20 * time.Second}
 	request, err := http.NewRequest(http.MethodGet, address, nil)
 	if err != nil {
 		fmt.Println("CallRealmIndexAPI() failed using http.NewRequest()")
@@ -141,6 +142,7 @@ func (d *Daemon) CallRealmIndexAPI(address string) (Realms, bool) {
 	res, err := client.Do(request)
 	if err != nil {
 		fmt.Println("CallRealmIndexAPI() failed using client.Do()")
+		log.Fatal(err)
 		return Realms{}, false
 	}
 	defer res.Body.Close()

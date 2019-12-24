@@ -15,11 +15,11 @@ const tokenString = "{token}"
 // ---------------------Database Types--------------------
 
 type DBInfo struct {
-	host      string `json:"host"`
-	port      int    `json:"port"`
-	user      string `json:"user"`
-	password  string `json:"password"`
-	dbname    string `json:"dbname"`
+	Host      string `json:"host"`
+	Port      int    `json:"port"`
+	User      string `json:"user"`
+	Password  string `json:"password"`
+	DBname    string `json:"dbname"`
 	connected bool
 }
 type aucDB struct {
@@ -38,6 +38,17 @@ type OAuthResponse struct {
 	AccessToken string `json:"access_token"`
 	Expires     int    `json:"expires_in"`
 	TokenType   string `json:"token_type"`
+}
+
+// ---------------------Token Types--------------------
+type Token struct {
+	Client        string
+	Secret        string
+	token         string `json:"access_token"`
+	LastModified  int
+	LastUpdated   time.Time
+	tokenURL      string
+	checkTokenURL string
 }
 
 // ---------------------Realm Types--------------------
@@ -120,7 +131,13 @@ type AuctionMeta struct {
 }
 
 // ---------------------Item Types--------------------
-
+type ItemManager struct {
+	toAdd      chan Item
+	toQueryAPI chan Item
+	Items      map[int]int
+	db         *sql.DB
+	dbInfo     DBInfo
+}
 type Modifiers struct {
 	Type  int `json:"type"`
 	Value int `json:"value"`
