@@ -119,7 +119,10 @@ func OpenDB(db DBInfo) (*sql.DB, bool) {
 
 func (a *AuctionHandler) AutomateAuctionCollection() {
 	// This function should likely be the only function actually called outside of this file
+
 	// Get the auction URL and check if the lastModified time is different than the currently held value
+
+	// If values are different,
 
 }
 func (a *AuctionHandler) SendAuctionToDB() {

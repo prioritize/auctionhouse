@@ -132,11 +132,14 @@ type AuctionMeta struct {
 
 // ---------------------Item Types--------------------
 type ItemManager struct {
-	toAdd      chan Item
-	toQueryAPI chan Item
-	Items      map[int]int
-	db         *sql.DB
-	dbInfo     DBInfo
+	api            map[string]string
+	toAdd          chan Item
+	toQueryAPI     chan Item
+	Items          map[int]int
+	db             *sql.DB
+	dbInfo         DBInfo
+	InsertString   *sql.Stmt
+	QueryStatement *sql.Stmt
 }
 type Modifiers struct {
 	Type  int `json:"type"`
