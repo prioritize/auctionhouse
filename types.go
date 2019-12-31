@@ -97,11 +97,12 @@ type AuctionHandler struct {
 	Realm       Realm
 	Auctions    chan Auction
 	LastChecked time.Time
-	Insert      string
-	Token       auctionauth.Token
+	Insert      *sql.Stmt
+	Token       string
 	URL         string
 	db          *sql.DB
-	dbInfo      DBInfo
+	DBInfo      DBInfo
+	IM          *ItemManager
 }
 type Auctions struct {
 	Auctions []Auction `json:"auctions"`
@@ -132,14 +133,14 @@ type AuctionMeta struct {
 
 // ---------------------Item Types--------------------
 type ItemManager struct {
-	api            map[string]string
-	toAdd          chan Item
-	toQueryAPI     chan Item
-	Items          map[int]int
-	db             *sql.DB
-	dbInfo         DBInfo
-	InsertString   *sql.Stmt
-	QueryStatement *sql.Stmt
+	api             map[string]string
+	toAdd           chan Item
+	toQuery         chan ItemQuery
+	Items           map[int]int
+	db              *sql.DB
+	DBInfo          DBInfo
+	InsertStatement *sql.Stmt
+	QueryStatement  *sql.Stmt
 }
 type Modifiers struct {
 	Type  int `json:"type"`
@@ -206,4 +207,8 @@ type Asset struct {
 }
 type AuctionFiles struct {
 	Info []AuctionMeta `json:"files"`
+}
+type ItemQuery struct {
+	Item  int
+	Token string
 }

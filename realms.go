@@ -18,10 +18,10 @@ func NewDaemon(region, locale string) (Daemon, bool) {
 	if !check {
 		d.Token = token
 	} else {
-		return Daemon{}, true
+		return Daemon{}, false
 	}
 	d.LoadMapWithAPI()
-	return d, false
+	return d, true
 }
 func (d *Daemon) LoadMapWithAPI() {
 	strings := make(map[string]interface{}, 0)

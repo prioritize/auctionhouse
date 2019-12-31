@@ -1,7 +1,6 @@
 package auctionhouse
 
 import (
-	"auctionauth"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -19,6 +18,20 @@ func (r *Realm) GetAuctionData() {
 
 func (r *Realm) BuildAuctionURL() {
 
+}
+func ServerHandler(r Realms, token string, dbInfo DBInfo, IM *ItemManager) []AuctionHandler {
+	auctions := make([]AuctionHandler, 0)
+	for _, v := range r.Realms {
+		server := NewAuctionHandler(token, v, dbInfo, IM)
+		auctions = append(auctions, server)
+	}
+	return auctions
+}
+func (a *AuctionHandler) worker() {
+	for {
+		auction := <-a.Auctions
+		a.IM.CheckItem(auction.Item, a.Token)
+	}
 }
 func (a *AuctionHandler) RequestAuctionData() {
 	client := http.Client{}
@@ -69,22 +82,26 @@ func (a *AuctionHandler) RequestAuctionData() {
 		a.Auctions <- v
 	}
 }
-func NewAuctionHandler(token auctionauth.Token, realm Realm, db DBInfo) AuctionHandler {
+func NewAuctionHandler(token string, realm Realm, db DBInfo, IM *ItemManager) AuctionHandler {
 	a := AuctionHandler{}
 	a.Realm = realm
 	a.LastChecked = time.Now()
 	a.Auctions = make(chan Auction, 5000)
 	a.Token = token
 	a.URL = realm.URL
-	a.Insert = `INSERT INTO "%s"(id, item, orealm, bid, buyout, quantity, timeleft, created) VALUES($1, $2, $3, $4, $5, $6, $7, NOW());`
-	database, check := OpenDB(db)
-	if !check {
+	database, ok := OpenDB(db)
+	if !ok {
 		fmt.Println("Error encountered in NewAuctionHandler()")
 		return AuctionHandler{}
 	}
 	a.db = database
-	a.dbInfo = db
+	a.DBInfo = db
+	statement := fmt.Sprintf(`INSERT INTO "%s"(id, item, orealm, bid, buyout, quantity, timeleft, created) VALUES($1, $2, $3, $4, $5, $6, $7, NOW());`, a.Realm.Slug)
+	insert, err := a.db.Prepare(statement)
+	check(err)
+	a.Insert = insert
 	// !! Open the DB here
+	a.IM = IM
 	return a
 }
 func GetDBInfo() (DBInfo, bool) {
@@ -136,9 +153,7 @@ func (a *AuctionHandler) SendAuctionToDB() {
 }
 
 func (a *AuctionHandler) ParseAuction(auction Auction) {
-	statement := fmt.Sprintf(a.Insert, a.Realm.Slug)
-	_, err := a.db.Exec(statement,
-		auction.AuctionID,
+	_, err := a.Insert.Exec(auction.AuctionID,
 		auction.Item,
 		auction.ORealm,
 		auction.Bid,
