@@ -1,7 +1,6 @@
 package auctionhouse
 
 import (
-	"auctionauth"
 	"database/sql"
 	"net/http"
 	"time"
@@ -83,12 +82,14 @@ type RealmData struct {
 	Slug         string    `json:"slug"`
 }
 type Daemon struct {
-	Token  auctionauth.Token
-	ID     int
-	API    map[string]string
-	Region string
-	Locale string
-	Realms []Realm
+	ID             int
+	API            map[string]string
+	Region         string
+	Locale         string
+	Realms         []Realm
+	AuctionManager []AuctionHandler
+	ItemManager    ItemManager
+	Token          Token
 }
 
 // ---------------------Auction Types--------------------

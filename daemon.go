@@ -1,7 +1,6 @@
 package auctionhouse
 
 import (
-	"auctionauth"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -14,13 +13,27 @@ import (
 
 func NewDaemon(region, locale string) (Daemon, bool) {
 	d := Daemon{Region: region, Locale: locale}
-	token, check := auctionauth.GetNewToken()
-	if !check {
-		d.Token = token
-	} else {
+	d.LoadMapWithAPI()
+	t := NewToken()
+	d.Token = t
+	dbInfo, ok := GetDBInfo()
+	if !ok {
+		fmt.Println("Failed to create NewDaemon()")
 		return Daemon{}, false
 	}
-	d.LoadMapWithAPI()
+	db, ok := OpenDB(dbInfo)
+	if !ok {
+		fmt.Println("Failed to create NewDaemon()")
+		return Daemon{}, false
+	}
+	realms, ok := d.GetRealms()
+	itemManager := NewItemManager()
+	AM := make([]AuctionHandler, 0)
+	for _, v := range realms.Realms {
+		handler := NewAuctionHandler(d.Token.Token(), v, db, &itemManager)
+		AM = append(AM, handler)
+	}
+	d.AuctionManager = AM
 	return d, true
 }
 func (d *Daemon) LoadMapWithAPI() {
@@ -77,7 +90,7 @@ func (d *Daemon) BuildAuctionURLS() {
 		}
 		url = strings.Replace(url, regionString, d.Region, 1)
 		url = strings.Replace(url, localeString, d.Locale, 1)
-		url = strings.Replace(url, tokenString, d.Token.Token, 1)
+		url = strings.Replace(url, tokenString, d.Token.Token(), 1)
 		url = strings.Replace(url, "{slug}", v.Slug, 1)
 
 		d.Realms[i].URL = url
@@ -90,7 +103,7 @@ func (d *Daemon) BuildRealmAddress(slug string) (string, bool) {
 	}
 	realmAddress = strings.Replace(realmAddress, regionString, d.Region, 1)
 	realmAddress = strings.Replace(realmAddress, localeString, d.Locale, 1)
-	realmAddress = strings.Replace(realmAddress, tokenString, d.Token.Token, 1)
+	realmAddress = strings.Replace(realmAddress, tokenString, d.Token.Token(), 1)
 	realmAddress = strings.Replace(realmAddress, "{slug}", slug, 1)
 	return realmAddress, true
 }
@@ -103,7 +116,7 @@ func (d *Daemon) BuildRealmIndexAddress() (string, bool) {
 	}
 	out := strings.Replace(realmIndex, regionString, d.Region, 1)
 	out = strings.Replace(out, localeString, d.Locale, 1)
-	out = strings.Replace(out, tokenString, d.Token.Token, 1)
+	out = strings.Replace(out, tokenString, d.Token.Token(), 1)
 	return out, true
 }
 
@@ -156,6 +169,7 @@ func (d *Daemon) CallRealmIndexAPI(address string) (Realms, bool) {
 	err = json.Unmarshal(body, &rd)
 	if err != nil {
 		fmt.Println("CallRealmIndexAPI() generated an error in json.Unmarshal")
+		fmt.Println(err.Error())
 		return Realms{}, false
 	}
 	return rd, true
@@ -174,4 +188,34 @@ func (d *Daemon) GetAPIStrings(components ...string) (string, bool) {
 		}
 	}
 	return out, true
+}
+
+func InitializeDatabase() {
+	// Create Realm tables
+	// Create Item Table
+	d := Daemon{Region: "us", Locale: "en_US"}
+	d.LoadMapWithAPI()
+	d.Token = NewToken()
+	realms, ok := d.GetRealms()
+	if !ok {
+		log.Fatal("Could not create initialize the database")
+	}
+	d.Realms = realms.Realms
+	dbInfo, ok := GetDBInfo()
+	if !ok {
+		log.Fatal("Could not create initialize the database")
+	}
+	db, ok := OpenDB(dbInfo)
+	if !ok {
+		log.Fatal("Could not create initialize the database")
+	}
+	for _, v := range realms.Realms {
+		realmString := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%s"(id int8 primary key, item int4, owner varchar(50), orealm varchar(50), bid int8, buyout int8, quantity smallint, timeleft varchar(50), created timestamp with time zone);`,
+			v.Slug)
+		db.Exec(realmString)
+	}
+	statement, err := db.Prepare("CREATE TABLE IF NOT EXISTS items(item int4 primary key, href varchar(150), name varchar(150));")
+	check(err)
+	statement.Exec()
+	db.Close()
 }

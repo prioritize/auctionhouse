@@ -25,7 +25,7 @@ func NewToken() Token {
 	t.Client = credentials.Client
 	t.Secret = credentials.Secret
 	t.token = ""
-	t.LastUpdated = time.Now()
+	// t.LastUpdated = time.Now()
 	t.tokenURL = buildTokenURL("us")
 	t.checkTokenURL = buildCheckURL("us")
 	t.ValidateToken()
@@ -44,8 +44,6 @@ func getCredentials() Credentials {
 func (t *Token) ValidateToken() {
 	if !t.checkValid() {
 		t.updateToken()
-	} else {
-		fmt.Println("Current token is valid")
 	}
 }
 
@@ -54,6 +52,9 @@ func (t *Token) Token() string {
 	return t.token
 }
 func (t *Token) checkValid() bool {
+	if time.Since(t.LastUpdated) < time.Minute*5 {
+		return true
+	}
 	holder := make(map[string]interface{}, 0)
 	client := http.Client{Timeout: timeout * time.Second}
 	supplied := "token=" + t.token
@@ -69,6 +70,7 @@ func (t *Token) checkValid() bool {
 	body, err := ioutil.ReadAll(response.Body)
 	err = json.Unmarshal(body, &holder)
 	check(err)
+	t.LastUpdated = time.Now()
 	return true
 }
 

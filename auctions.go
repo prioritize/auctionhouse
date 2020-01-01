@@ -11,22 +11,6 @@ import (
 	"time"
 )
 
-// Realm.GetAuctionData
-func (r *Realm) GetAuctionData() {
-
-}
-
-func (r *Realm) BuildAuctionURL() {
-
-}
-func ServerHandler(r Realms, token string, dbInfo DBInfo, IM *ItemManager) []AuctionHandler {
-	auctions := make([]AuctionHandler, 0)
-	for _, v := range r.Realms {
-		server := NewAuctionHandler(token, v, dbInfo, IM)
-		auctions = append(auctions, server)
-	}
-	return auctions
-}
 func (a *AuctionHandler) worker() {
 	for {
 		auction := <-a.Auctions
@@ -82,26 +66,27 @@ func (a *AuctionHandler) RequestAuctionData() {
 		a.Auctions <- v
 	}
 }
-func NewAuctionHandler(token string, realm Realm, db DBInfo, IM *ItemManager) AuctionHandler {
+func NewAuctionHandler(token string, realm Realm, db *sql.DB, IM *ItemManager) AuctionHandler {
 	a := AuctionHandler{}
 	a.Realm = realm
 	a.LastChecked = time.Now()
 	a.Auctions = make(chan Auction, 5000)
 	a.Token = token
 	a.URL = realm.URL
-	database, ok := OpenDB(db)
+	dbInfo, ok := GetDBInfo()
 	if !ok {
-		fmt.Println("Error encountered in NewAuctionHandler()")
-		return AuctionHandler{}
+		fmt.Println("Couldn't get DBInfo in NewAuctionHandler()")
 	}
-	a.db = database
-	a.DBInfo = db
+	a.DBInfo = dbInfo
+	// database, ok := OpenDB(db)
+	a.db = db
 	statement := fmt.Sprintf(`INSERT INTO "%s"(id, item, orealm, bid, buyout, quantity, timeleft, created) VALUES($1, $2, $3, $4, $5, $6, $7, NOW());`, a.Realm.Slug)
 	insert, err := a.db.Prepare(statement)
 	check(err)
 	a.Insert = insert
 	// !! Open the DB here
 	a.IM = IM
+	go a.SendAuctionToDB()
 	return a
 }
 func GetDBInfo() (DBInfo, bool) {
@@ -146,7 +131,6 @@ func (a *AuctionHandler) SendAuctionToDB() {
 	for {
 		auction, ok := <-a.Auctions
 		if ok {
-			fmt.Println("Something happened")
 			a.ParseAuction(auction)
 		}
 	}
