@@ -8,7 +8,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
+
+	// this is required to use the psql driver
+	_ "github.com/lib/pq"
 )
 
 func (a *AuctionHandler) worker() {
@@ -69,8 +73,8 @@ func (a *AuctionHandler) RequestAuctionData() {
 func NewAuctionHandler(token string, realm Realm, db *sql.DB, IM *ItemManager) AuctionHandler {
 	a := AuctionHandler{}
 	a.Realm = realm
-	a.LastChecked = time.Now()
-	a.Auctions = make(chan Auction, 5000)
+	a.LastChecked = time.Time{}
+	a.Auctions = make(chan Auction, 50000)
 	a.Token = token
 	a.URL = realm.URL
 	dbInfo, ok := GetDBInfo()
@@ -86,6 +90,7 @@ func NewAuctionHandler(token string, realm Realm, db *sql.DB, IM *ItemManager) A
 	a.Insert = insert
 	// !! Open the DB here
 	a.IM = IM
+	go a.SendAuctionToDB()
 	go a.SendAuctionToDB()
 	return a
 }
@@ -119,14 +124,6 @@ func OpenDB(db DBInfo) (*sql.DB, bool) {
 	return database, true
 }
 
-func (a *AuctionHandler) AutomateAuctionCollection() {
-	// This function should likely be the only function actually called outside of this file
-
-	// Get the auction URL and check if the lastModified time is different than the currently held value
-
-	// If values are different,
-
-}
 func (a *AuctionHandler) SendAuctionToDB() {
 	for {
 		auction, ok := <-a.Auctions
@@ -145,8 +142,14 @@ func (a *AuctionHandler) ParseAuction(auction Auction) {
 		auction.Quantity,
 		auction.TimeLeft,
 	)
-	if err != nil {
-		fmt.Println("Error from db.Exec() in ParseAuction")
+	if err == nil {
+		// this is likely going to generate a race condition, but that isn't a huge issue
+		a.count++
+	} else {
 		fmt.Println(err.Error())
+	}
+	if a.count > 0 && a.count%100 == 0 {
+		fmt.Println("Keep It 100" + strconv.Itoa(a.count))
+		// fmt.Println(info.LastInsertId())
 	}
 }

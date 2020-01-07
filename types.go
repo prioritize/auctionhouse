@@ -104,6 +104,7 @@ type AuctionHandler struct {
 	db          *sql.DB
 	DBInfo      DBInfo
 	IM          *ItemManager
+	count       int
 }
 type Auctions struct {
 	Auctions []Auction `json:"auctions"`
