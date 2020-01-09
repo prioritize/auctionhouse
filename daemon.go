@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -34,6 +35,7 @@ func NewDaemon(region, locale string) (Daemon, bool) {
 		AM = append(AM, handler)
 	}
 	d.AuctionManager = AM
+	go d.monitor()
 	return d, true
 }
 func (d *Daemon) LoadMapWithAPI() {
@@ -218,4 +220,19 @@ func InitializeDatabase() {
 	check(err)
 	statement.Exec()
 	db.Close()
+}
+func (d *Daemon) monitor() {
+	tick := time.Tick(time.Second * 10)
+	for {
+		<-tick
+		for _, v := range d.AuctionManager {
+			if len(v.Auctions) > 0 {
+				fmt.Println(v.Realm.Slug + " - len(toAdd) " + strconv.Itoa(len(v.Auctions)))
+			}
+		}
+	}
+}
+
+func (d *Daemon) auctionWorker() {
+
 }

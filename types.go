@@ -56,10 +56,14 @@ type Realms struct {
 	Realms []Realm `json:"realms"`
 }
 type Realm struct {
-	Name string `json:"name"`
-	ID   int    `json:"id"`
-	Slug string `json:"slug"`
-	URL  string
+	Name         string `json:"name"`
+	ID           int    `json:"id"`
+	Slug         string `json:"slug"`
+	URL          string
+	AuctionURL   string
+	insertString string
+	queryString  string
+	lastChecked  time.Time
 }
 
 type Region struct {
@@ -90,6 +94,10 @@ type Daemon struct {
 	AuctionManager []AuctionHandler
 	ItemManager    ItemManager
 	Token          Token
+	dbPool         chan DBRef
+	httpPool       chan http.Client
+	Auctions       chan Auction
+	Items          chan Item
 }
 
 // ---------------------Auction Types--------------------
@@ -99,12 +107,14 @@ type AuctionHandler struct {
 	Auctions    chan Auction
 	LastChecked time.Time
 	Insert      *sql.Stmt
+	Query       *sql.Stmt
 	Token       string
 	URL         string
 	db          *sql.DB
 	DBInfo      DBInfo
 	IM          *ItemManager
 	count       int
+	idList      map[int]int
 }
 type Auctions struct {
 	Auctions []Auction `json:"auctions"`

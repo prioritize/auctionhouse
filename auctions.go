@@ -15,60 +15,71 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// worker is not being used yet as nothing is being pulled from the items channel
 func (a *AuctionHandler) worker() {
 	for {
 		auction := <-a.Auctions
 		a.IM.CheckItem(auction.Item, a.Token)
 	}
 }
-func (a *AuctionHandler) RequestAuctionData() {
+func (d *Daemon) RequestAuctionData(r Realm) {
 	client := http.Client{}
-	request, err := http.NewRequest(http.MethodGet, a.URL, nil)
+	request, err := http.NewRequest(http.MethodGet, r.AuctionURL, nil)
 	if err != nil {
-		fmt.Println("Error in RequestAuctionData() -- NewRequest()-1 -- " + a.Realm.Slug)
+		fmt.Println("Error in RequestAuctionData() -- NewRequest()-1 -- " + r.Slug)
 		return
 	}
 	res, err := client.Do(request)
 	if err != nil {
-		fmt.Println("Error in RequestAuctionData() -- client.Do()-1" + a.Realm.Slug)
+		fmt.Println("Error in RequestAuctionData() -- client.Do()-1" + r.Slug)
 		return
 	}
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		fmt.Println("Error in RequestAuctionData() -- ReadAll() - 1" + a.Realm.Slug)
+		fmt.Println("Error in RequestAuctionData() -- ReadAll() - 1" + r.Slug)
 		return
 	}
 	files := Files{}
 	err = json.Unmarshal(body, &files)
 	if err != nil {
-		fmt.Println("Error in RequestAuctionData() -- Unmarshal-1" + a.Realm.Slug)
+		fmt.Println("Error in RequestAuctionData() -- Unmarshal-1" + r.Slug)
 		return
 	}
 	request, err = http.NewRequest(http.MethodGet, files.Files[0].URL, nil)
 	if err != nil {
-		fmt.Println("Error in RequestAuctionData() -- NewRequest - 2 " + a.Realm.Slug)
+		fmt.Println("Error in RequestAuctionData() -- NewRequest - 2 " + r.Slug)
 		return
 	}
 	res, err = client.Do(request)
 	if err != nil {
-		fmt.Println("Error in RequestAuctionData() -- client.Do() - 2" + a.Realm.Slug)
+		fmt.Println("Error in RequestAuctionData() -- client.Do() - 2" + r.Slug)
 		return
 	}
 	body, err = ioutil.ReadAll(res.Body)
 	if err != nil {
-		fmt.Println("Error in RequestAuctionData() -- ReadAll() - 2" + a.Realm.Slug)
+		fmt.Println("Error in RequestAuctionData() -- ReadAll() - 2" + r.Slug)
 		log.Fatal(err)
 		return
 	}
 	auctions := Auctions{}
 	err = json.Unmarshal(body, &auctions)
 	if err != nil {
-		fmt.Println("Error in RequestAuctionData() -- Unmarshal - 2" + a.Realm.Slug)
+		fmt.Println("Error in RequestAuctionData() -- Unmarshal - 2" + r.Slug)
 		return
 	}
+	storage := a.fillAuctionMap()
 	for _, v := range auctions.Auctions {
-		a.Auctions <- v
+		_, ok := storage[v.AuctionID]
+		if !ok {
+			a.Auctions <- v
+		}
 	}
+	client.CloseIdleConnections()
+	fmt.Println("-----------------------------------------------------")
+	fmt.Println("All auctions from " + a.Realm.Slug + " sent to channel")
+	fmt.Println("Number of items in auction channel: " + strconv.Itoa(len(a.Auctions)))
+	fmt.Println("-----------------------------------------------------")
+	fmt.Println()
 }
 func NewAuctionHandler(token string, realm Realm, db *sql.DB, IM *ItemManager) AuctionHandler {
 	a := AuctionHandler{}
@@ -87,11 +98,13 @@ func NewAuctionHandler(token string, realm Realm, db *sql.DB, IM *ItemManager) A
 	statement := fmt.Sprintf(`INSERT INTO "%s"(id, item, orealm, bid, buyout, quantity, timeleft, created) VALUES($1, $2, $3, $4, $5, $6, $7, NOW());`, a.Realm.Slug)
 	insert, err := a.db.Prepare(statement)
 	check(err)
+	statement = fmt.Sprintf(`select id from "%s";`, a.Realm.Slug)
+	query, err := a.db.Prepare(statement)
+	check(err)
 	a.Insert = insert
+	a.Query = query
 	// !! Open the DB here
 	a.IM = IM
-	go a.SendAuctionToDB()
-	go a.SendAuctionToDB()
 	return a
 }
 func GetDBInfo() (DBInfo, bool) {
@@ -124,17 +137,8 @@ func OpenDB(db DBInfo) (*sql.DB, bool) {
 	return database, true
 }
 
-func (a *AuctionHandler) SendAuctionToDB() {
-	for {
-		auction, ok := <-a.Auctions
-		if ok {
-			a.ParseAuction(auction)
-		}
-	}
-}
-
-func (a *AuctionHandler) ParseAuction(auction Auction) {
-	_, err := a.Insert.Exec(auction.AuctionID,
+func (a *AuctionHandler) SendAuctionToDB(auction Auction, db DBRef) {
+	db.InsertAuction.Exec(auction.AuctionID,
 		auction.Item,
 		auction.ORealm,
 		auction.Bid,
@@ -142,14 +146,4 @@ func (a *AuctionHandler) ParseAuction(auction Auction) {
 		auction.Quantity,
 		auction.TimeLeft,
 	)
-	if err == nil {
-		// this is likely going to generate a race condition, but that isn't a huge issue
-		a.count++
-	} else {
-		fmt.Println(err.Error())
-	}
-	if a.count > 0 && a.count%100 == 0 {
-		fmt.Println("Keep It 100" + strconv.Itoa(a.count))
-		// fmt.Println(info.LastInsertId())
-	}
 }
