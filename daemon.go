@@ -1,6 +1,7 @@
 package auctionhouse
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -12,7 +13,7 @@ import (
 	"time"
 )
 
-func NewDaemon(region, locale string) (Daemon, bool) {
+func NewDaemon(region, locale string, dbConnections, httpConnections, workers int) (Daemon, bool) {
 	d := Daemon{Region: region, Locale: locale}
 	d.LoadMapWithAPI()
 	t := NewToken()
@@ -22,21 +23,74 @@ func NewDaemon(region, locale string) (Daemon, bool) {
 		fmt.Println("Failed to create NewDaemon()")
 		return Daemon{}, false
 	}
-	db, ok := OpenDB(dbInfo)
-	if !ok {
-		fmt.Println("Failed to create NewDaemon()")
-		return Daemon{}, false
+	d.realms = make(chan Realm, 300)
+	d.dbPool = make(chan *sql.DB, dbConnections)
+	d.httpPool = make(chan http.Client, httpConnections)
+	for index := 0; index < dbConnections; index++ {
+		db, ok := OpenDB(dbInfo)
+		if !ok {
+			fmt.Println("Failed to create NewDaemon()")
+			return Daemon{}, false
+		}
+		d.dbPool <- db
+	}
+	for index := 0; index < httpConnections; index++ {
+		client := http.Client{}
+		d.httpPool <- client
 	}
 	realms, ok := d.GetRealms()
-	itemManager := NewItemManager()
-	AM := make([]AuctionHandler, 0)
+	dbAPI := BuildDBMap()
+	d.realmMap = make(map[string]Realm, 0)
+	d.realmCross = make(map[string]string, 0)
 	for _, v := range realms.Realms {
-		handler := NewAuctionHandler(d.Token.Token(), v, db, &itemManager)
-		AM = append(AM, handler)
+		r := NewRealm(v.Name, v.Slug, v.ID, dbAPI, d.Token.Token())
+		d.realmMap[r.Slug] = r
+		d.realms <- r
 	}
-	d.AuctionManager = AM
+	for _, v := range realms.Realms {
+		d.realmCross[v.Name] = v.Slug
+	}
+	go d.AuctionWorker()
+	d.Auctions = make(chan Auction, 500000)
+	for index := 0; index < workers; index++ {
+		go d.AuctionInserter()
+	}
+	// itemManager := NewItemManager()
+
 	go d.monitor()
 	return d, true
+}
+func (d *Daemon) AuctionInserter() {
+	for {
+		auction := <-d.Auctions
+		db := <-d.dbPool
+		d.AuctionToDB(auction, db)
+		d.dbPool <- db
+	}
+}
+func (d *Daemon) AuctionToDB(auction Auction, db *sql.DB) {
+	realm := d.realmMap[d.realmCross[auction.ORealm]]
+	db.Exec(realm.insertString,
+		auction.AuctionID,
+		auction.Item,
+		auction.ORealm,
+		auction.Bid,
+		auction.Buyout,
+		auction.Quantity,
+		auction.TimeLeft,
+	)
+}
+func (d *Daemon) RealmCount() int {
+	return len(d.realms)
+}
+func (d *Daemon) DBCount() int {
+	return len(d.dbPool)
+}
+func (d *Daemon) HTTPCount() int {
+	return len(d.httpPool)
+}
+func (d *Daemon) AuctionCount() int {
+	return len(d.Auctions)
 }
 func (d *Daemon) LoadMapWithAPI() {
 	strings := make(map[string]interface{}, 0)
@@ -215,6 +269,8 @@ func InitializeDatabase() {
 		realmString := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%s"(id int8 primary key, item int4, owner varchar(50), orealm varchar(50), bid int8, buyout int8, quantity smallint, timeleft varchar(50), created timestamp with time zone);`,
 			v.Slug)
 		db.Exec(realmString)
+		alterString := fmt.Sprintf(`alter table "%s" set unlogged;`, v.Slug)
+		db.Exec(alterString)
 	}
 	statement, err := db.Prepare("CREATE TABLE IF NOT EXISTS items(item int4 primary key, href varchar(150), name varchar(150));")
 	check(err)
@@ -225,14 +281,9 @@ func (d *Daemon) monitor() {
 	tick := time.Tick(time.Second * 10)
 	for {
 		<-tick
-		for _, v := range d.AuctionManager {
-			if len(v.Auctions) > 0 {
-				fmt.Println(v.Realm.Slug + " - len(toAdd) " + strconv.Itoa(len(v.Auctions)))
-			}
-		}
+		fmt.Println("-----------------------------------------------------")
+		fmt.Println("Number of items in auction channel: " + strconv.Itoa(len(d.Auctions)))
+		fmt.Println("-----------------------------------------------------")
+		fmt.Println()
 	}
-}
-
-func (d *Daemon) auctionWorker() {
-
 }

@@ -63,6 +63,8 @@ type Realm struct {
 	AuctionURL   string
 	insertString string
 	queryString  string
+	Region       string
+	Locale       string
 	lastChecked  time.Time
 }
 
@@ -88,16 +90,19 @@ type RealmData struct {
 type Daemon struct {
 	ID             int
 	API            map[string]string
+	realmMap       map[string]Realm
 	Region         string
 	Locale         string
 	Realms         []Realm
 	AuctionManager []AuctionHandler
 	ItemManager    ItemManager
 	Token          Token
-	dbPool         chan DBRef
+	dbPool         chan *sql.DB
 	httpPool       chan http.Client
 	Auctions       chan Auction
 	Items          chan Item
+	realms         chan Realm
+	realmCross     map[string]string
 }
 
 // ---------------------Auction Types--------------------

@@ -15,15 +15,19 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// worker is not being used yet as nothing is being pulled from the items channel
-func (a *AuctionHandler) worker() {
+func (d *Daemon) AuctionWorker() {
+	tick := time.Tick(time.Second * 3)
 	for {
-		auction := <-a.Auctions
-		a.IM.CheckItem(auction.Item, a.Token)
+		<-tick
+		realm := <-d.realms
+		db := <-d.dbPool
+		d.RequestAuctionData(realm, db)
+		d.dbPool <- db
+		d.realms <- realm
 	}
 }
-func (d *Daemon) RequestAuctionData(r Realm) {
-	client := http.Client{}
+func (d *Daemon) RequestAuctionData(r Realm, db *sql.DB) {
+	client := <-d.httpPool
 	request, err := http.NewRequest(http.MethodGet, r.AuctionURL, nil)
 	if err != nil {
 		fmt.Println("Error in RequestAuctionData() -- NewRequest()-1 -- " + r.Slug)
@@ -67,46 +71,47 @@ func (d *Daemon) RequestAuctionData(r Realm) {
 		fmt.Println("Error in RequestAuctionData() -- Unmarshal - 2" + r.Slug)
 		return
 	}
-	storage := a.fillAuctionMap()
+	storage := r.fillAuctionMap(db)
 	for _, v := range auctions.Auctions {
 		_, ok := storage[v.AuctionID]
 		if !ok {
-			a.Auctions <- v
+			d.Auctions <- v
 		}
 	}
-	client.CloseIdleConnections()
 	fmt.Println("-----------------------------------------------------")
-	fmt.Println("All auctions from " + a.Realm.Slug + " sent to channel")
-	fmt.Println("Number of items in auction channel: " + strconv.Itoa(len(a.Auctions)))
+	fmt.Println("All auctions from " + r.Slug + " sent to channel")
+	fmt.Println("Number of items in auction channel: " + strconv.Itoa(len(d.Auctions)))
 	fmt.Println("-----------------------------------------------------")
 	fmt.Println()
+	d.httpPool <- client
 }
-func NewAuctionHandler(token string, realm Realm, db *sql.DB, IM *ItemManager) AuctionHandler {
-	a := AuctionHandler{}
-	a.Realm = realm
-	a.LastChecked = time.Time{}
-	a.Auctions = make(chan Auction, 50000)
-	a.Token = token
-	a.URL = realm.URL
-	dbInfo, ok := GetDBInfo()
-	if !ok {
-		fmt.Println("Couldn't get DBInfo in NewAuctionHandler()")
-	}
-	a.DBInfo = dbInfo
-	// database, ok := OpenDB(db)
-	a.db = db
-	statement := fmt.Sprintf(`INSERT INTO "%s"(id, item, orealm, bid, buyout, quantity, timeleft, created) VALUES($1, $2, $3, $4, $5, $6, $7, NOW());`, a.Realm.Slug)
-	insert, err := a.db.Prepare(statement)
-	check(err)
-	statement = fmt.Sprintf(`select id from "%s";`, a.Realm.Slug)
-	query, err := a.db.Prepare(statement)
-	check(err)
-	a.Insert = insert
-	a.Query = query
-	// !! Open the DB here
-	a.IM = IM
-	return a
-}
+
+// func NewAuctionHandler(token string, realm Realm, db *sql.DB, IM *ItemManager) AuctionHandler {
+// 	a := AuctionHandler{}
+// 	a.Realm = realm
+// 	a.LastChecked = time.Time{}
+// 	a.Auctions = make(chan Auction, 50000)
+// 	a.Token = token
+// 	a.URL = realm.URL
+// 	dbInfo, ok := GetDBInfo()
+// 	if !ok {
+// 		fmt.Println("Couldn't get DBInfo in NewAuctionHandler()")
+// 	}
+// 	a.DBInfo = dbInfo
+// 	// database, ok := OpenDB(db)
+// 	a.db = db
+// 	statement := fmt.Sprintf(`INSERT INTO "%s"(id, item, orealm, bid, buyout, quantity, timeleft, created) VALUES($1, $2, $3, $4, $5, $6, $7, NOW());`, a.Realm.Slug)
+// 	insert, err := a.db.Prepare(statement)
+// 	check(err)
+// 	statement = fmt.Sprintf(`select id from "%s";`, a.Realm.Slug)
+// 	query, err := a.db.Prepare(statement)
+// 	check(err)
+// 	a.Insert = insert
+// 	a.Query = query
+// 	// !! Open the DB here
+// 	a.IM = IM
+// 	return a
+// }
 func GetDBInfo() (DBInfo, bool) {
 	file, err := os.Open("../auctionjson/database.json")
 	if err != nil {
@@ -137,13 +142,13 @@ func OpenDB(db DBInfo) (*sql.DB, bool) {
 	return database, true
 }
 
-func (a *AuctionHandler) SendAuctionToDB(auction Auction, db DBRef) {
-	db.InsertAuction.Exec(auction.AuctionID,
-		auction.Item,
-		auction.ORealm,
-		auction.Bid,
-		auction.Buyout,
-		auction.Quantity,
-		auction.TimeLeft,
-	)
-}
+// func (a *AuctionHandler) SendAuctionToDB(auction Auction, db *sql.DB) {
+// 	db.InsertAuction.Exec(auction.AuctionID,
+// 		auction.Item,
+// 		auction.ORealm,
+// 		auction.Bid,
+// 		auction.Buyout,
+// 		auction.Quantity,
+// 		auction.TimeLeft,
+// 	)
+// }
