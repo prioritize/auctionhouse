@@ -19,14 +19,19 @@ func (d *Daemon) AuctionWorker() {
 	tick := time.Tick(time.Second * 3)
 	for {
 		<-tick
+		fmt.Println("len(realms): " + strconv.Itoa(len(d.realms)))
+		fmt.Println("len(dbPool): " + strconv.Itoa(len(d.dbPool)))
 		realm := <-d.realms
 		db := <-d.dbPool
-		d.RequestAuctionData(realm, db)
+		fmt.Println(realm.Slug + " last modified before: " + strconv.Itoa(realm.lastModified))
+		d.RequestAuctionData(&realm, db)
+		fmt.Println(realm.Slug + " last modified after: " + strconv.Itoa(realm.lastModified))
+		fmt.Println()
 		d.dbPool <- db
 		d.realms <- realm
 	}
 }
-func (d *Daemon) RequestAuctionData(r Realm, db *sql.DB) {
+func (d *Daemon) RequestAuctionData(r *Realm, db *sql.DB) {
 	client := <-d.httpPool
 	request, err := http.NewRequest(http.MethodGet, r.AuctionURL, nil)
 	if err != nil {
@@ -49,6 +54,11 @@ func (d *Daemon) RequestAuctionData(r Realm, db *sql.DB) {
 		fmt.Println("Error in RequestAuctionData() -- Unmarshal-1" + r.Slug)
 		return
 	}
+	if files.Files[0].Modified == r.lastModified {
+		fmt.Println(r.Slug + " auctions not modified, skipping")
+		return
+	}
+	r.lastModified = files.Files[0].Modified
 	request, err = http.NewRequest(http.MethodGet, files.Files[0].URL, nil)
 	if err != nil {
 		fmt.Println("Error in RequestAuctionData() -- NewRequest - 2 " + r.Slug)
@@ -59,6 +69,7 @@ func (d *Daemon) RequestAuctionData(r Realm, db *sql.DB) {
 		fmt.Println("Error in RequestAuctionData() -- client.Do() - 2" + r.Slug)
 		return
 	}
+	fmt.Println("res.StatusCode: " + strconv.Itoa(res.StatusCode))
 	body, err = ioutil.ReadAll(res.Body)
 	if err != nil {
 		fmt.Println("Error in RequestAuctionData() -- ReadAll() - 2" + r.Slug)
@@ -69,6 +80,7 @@ func (d *Daemon) RequestAuctionData(r Realm, db *sql.DB) {
 	err = json.Unmarshal(body, &auctions)
 	if err != nil {
 		fmt.Println("Error in RequestAuctionData() -- Unmarshal - 2" + r.Slug)
+		d.httpPool <- client
 		return
 	}
 	storage := r.fillAuctionMap(db)

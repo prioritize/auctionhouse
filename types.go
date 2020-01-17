@@ -66,6 +66,7 @@ type Realm struct {
 	Region       string
 	Locale       string
 	lastChecked  time.Time
+	lastModified int
 }
 
 type Region struct {
@@ -140,7 +141,8 @@ type Files struct {
 }
 
 type AuctionURL struct {
-	URL string `json:"url"`
+	URL      string `json:"url"`
+	Modified int    `json:"lastModified"`
 }
 
 type AuctionMeta struct {
