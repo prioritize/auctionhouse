@@ -52,6 +52,7 @@ func (d *Daemon) RequestAuctionData(r *Realm, db *sql.DB) {
 	err = json.Unmarshal(body, &files)
 	if err != nil {
 		fmt.Println("Error in RequestAuctionData() -- Unmarshal-1" + r.Slug)
+		log.Fatal(err)
 		return
 	}
 	if files.Files[0].Modified == r.lastModified {
